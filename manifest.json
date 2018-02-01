@@ -1,0 +1,35 @@
+{
+  "manifest_version": 2,
+  "name": "ydl",
+  "version": "1.0",
+
+  "description": "Downloads videos using youtube-dl",
+  "homepage_url": "https://github.com/dedeibel/ydl",
+  "icons": {
+    "48": "icons/icon-48.png"
+  },
+
+  "applications": {
+    "gecko": {
+      "id": "dedeibelydl@example.org",
+      "strict_min_version": "50.0"
+    }
+  },
+
+  "browser_action": {
+    "default_icon": "icons/icon-32.png",
+    "default_title": "ydl",
+    "default_popup": "popup/status.html",
+    "browser_style": true
+  },
+
+  "background": {
+    "scripts": ["background-script.js"]
+  },
+
+  "permissions": [
+    "nativeMessaging",
+    "tabs",
+    "activeTab"
+  ]
+}

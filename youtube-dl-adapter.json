@@ -1,0 +1,7 @@
+{
+  "name": "youtubedladapter",
+  "description": "Adapter for youtube dl",
+  "path": "/opt/bin/youtube-dl-adapter",
+  "type": "stdio",
+  "allowed_extensions": [ "dedeibelydl@example.org" ]
+}

@@ -1,0 +1,302 @@
+#!/usr/bin/env python3
+import sys
+import json
+import struct
+import atexit
+import select
+import os
+import signal
+from time import localtime, strftime
+from subprocess import Popen, PIPE
+from enum import Enum
+
+# Modify this directoy to your target dir, slash will be added
+# files dropped inside with cleaned filename
+download_directory = '~/youtube-dl-downloads'
+
+# youtube-dl path
+youtube_dl_path = '/usr/bin/youtube-dl'
+
+#
+# Print debug output to file for debugging
+#
+
+enableDebug = False
+debugFilename = '/tmp/youtube-dl-log.txt'
+
+#
+# 
+#
+
+debugFile = None
+
+class State(Enum):
+    INIT = 1
+    RUNNING = 2
+    DONE = 3
+    FAILED = 4
+
+class Download:
+    id_counter = 0
+
+    def __init__(self, url, title):
+        self.id = Download.id_counter
+        Download.id_counter += 1
+
+        self.url = url
+        self.title = title
+        self.state = State.INIT
+        self.current_status_text = 'not started'
+
+    def log(self, msg):
+        log('[%d][%s] %s' % (self.id, self.state.name, msg))
+
+    def update_status(self):
+        if self.is_finished():
+            return
+
+        retcode = self.proc.poll()
+        if retcode != None:
+            self._evaluate_returncode(retcode)
+            self.proc = None
+        else:
+            self._read_output()
+
+    def _evaluate_returncode(self, retcode):
+        if retcode != 0:
+            self.state = State.FAILED
+            line = ''
+            for line in iter(self.proc.stderr.readline, ''):
+                self.log('stderr ' + line)
+                self.current_status_text = 'failed - ' + line
+        else:
+            self.state = State.DONE
+            self.current_status_text = 'done / exited'
+            self.log('done')
+
+    def _read_output(self):
+        while (select.select([self.proc.stdout],[],[],0)[0]!=[]):
+            line = self.proc.stdout.readline()
+            self.log('stdout ' + line)
+            if '[download]' in line:
+                self.current_status_text = line.replace('[download] ', '')
+
+    def is_running(self):
+        return self.state == State.RUNNING
+
+    def is_done(self):
+        return self.state == State.DONE
+
+    def is_failed(self):
+        return self.state == State.FAILED
+
+    def is_finished(self):
+        return (self.state == State.DONE or
+               self.state == State.FAILED)
+
+    def start(self):
+        if self.state != State.INIT:
+            raise Exception('download must be in init state')
+
+        # TODO config
+        self.state = State.RUNNING
+        self.current_status_text = 'starting'
+        self.log('download ' + self.url)
+        self.proc = Popen([
+            youtube_dl_path,
+            '--abort-on-error',
+            '--ignore-config',
+            '--no-mark-watched',
+            '--socket-timeout', '3',
+            '--max-filesize', '10g',
+            '--buffer-size', '16K',
+            '--restrict-filenames',
+            '--continue',
+            '--newline',
+            '--user-agent', 'Mozilla/5.0 (X11; Linux x86_64; rv:58.0) Gecko/20100101',
+            '--output',
+            download_directory + '/%(title)s.%(ext)s',
+            self.url
+            ], stdout=PIPE, stderr=PIPE, universal_newlines=True)
+        
+        return self
+
+    def status(self):
+        return {
+            'id': self.id,
+            'url': self.url,
+            'title': self.title,
+            'state': self.state.name,
+            'status_text': self.current_status_text
+        }
+
+    def kill(self):
+        if self.is_finished():
+            return
+
+        self.proc.kill()
+
+class DownloadList:
+
+    def __init__(self):
+        self.downloads = []
+
+    def add(self, download):
+        self.downloads.append(download)
+
+    def any_download_running(self):
+        for download in self.downloads:
+            if not download.is_finished():
+                return True
+        return False
+    
+    def work_to_do(self):
+        return len(self.downloads) == 0 or self.any_download_running()
+    
+    def already_downloading(self, url):
+        for download in self.downloads:
+            if not download.is_failed() and download.url == url:
+                return True
+        return False
+    
+    def clear_finished_downloads(self):
+        self.downloads = list(filter(lambda download: not download.is_finished(), self.downloads))
+    
+    def killall(self):
+        for download in self.downloads:
+            if download.is_running():
+                download.kill()
+
+    def update_status(self):
+        status = []
+        for download in self.downloads:
+            download.update_status()
+            status.append(download.status())
+        return status
+
+
+def debugOpenFile():
+    if not enableDebug:
+        return
+
+    global debugFile
+    debugFile = open(debugFilename, 'a')
+
+def log(msg):
+    if not enableDebug:
+        return
+
+    timestamp = strftime("%Y-%m-%d %H:%M:%S", localtime())
+    debugFile.write(timestamp + ': ' + msg + "\n")
+    debugFile.flush()
+
+def debugClose():
+    if not enableDebug or not debugFile:
+        return
+
+    debugFile.close()
+
+downloads = DownloadList()
+
+def exit_handler():
+    log('exiting, cleaning up')
+    downloads.killall()
+    debugClose()
+
+# Read a message from stdin and decode it.
+def getMessage():
+    inputs = [sys.stdin.buffer]
+    outputs = []
+    timeout = 2
+    try:
+        readable, writable, exceptional = select.select(inputs, outputs, inputs, timeout)
+        if readable:
+            rawLength = sys.stdin.buffer.read(4)
+            if len(rawLength) == 0:
+                log('error reading input stream')
+                sys.exit(0)
+            
+            messageLength = struct.unpack('@I', rawLength)[0]
+            message = sys.stdin.buffer.read(messageLength).decode('utf-8')
+            return json.loads(message)
+
+        if exceptional:
+            log('error reading input stream')
+            sys.exit(0)
+    except:
+        time.sleep(1)
+        log('exception while waiting for input')
+
+    return None
+
+# Encode a message for transmission,
+# given its content.
+def encodeMessage(messageContent):
+  encodedContent = json.dumps(messageContent).encode('utf-8')
+  encodedLength = struct.pack('@I', len(encodedContent))
+  return {'length': encodedLength, 'content': encodedContent}
+
+# Send an encoded message to stdout
+def sendMessage(encodedMessage):
+  sys.stdout.buffer.write(encodedMessage['length'])
+  sys.stdout.buffer.write(encodedMessage['content'])
+  sys.stdout.buffer.flush()
+
+def send(msg):
+    sendMessage(encodeMessage(msg))
+
+def send_status_list(status_list):
+    send({
+        'action': 'status',
+        'data': status_list
+    })
+
+def handle_download_message(received_message):
+    if downloads.already_downloading(received_message['url']):
+        log('url already existing: ' + received_message['url'])
+        return
+
+    download = Download(received_message['url'], received_message['title'])
+    downloads.add(download)
+    download.start()
+
+def handle_message(received_message):
+    action = received_message['action']
+    if action == 'clear_finished':
+        downloads.clear_finished_downloads()
+    elif action == 'stop_all':
+        downloads.killall()
+    elif action == 'download' and 'url' in received_message:
+        handle_download_message(received_message)
+    else:
+        log('invalid msg %s' % received_message)
+
+#
+# main
+#
+
+debugOpenFile()
+atexit.register(exit_handler)
+
+log('starting script, args: ' + str(sys.argv))
+
+cli_url = None
+if sys.argv[1] == '--url':
+    cli_url = sys.argv[2]
+
+if cli_url:
+    downloads.add(Download(cli_url, 'cli').start())
+
+try:
+    while downloads.work_to_do():
+        received_message = getMessage()
+        
+        if received_message:
+            handle_message(received_message)
+        
+        status_list = downloads.update_status()
+        send_status_list(status_list)
+except Exception as e:
+    log('Exited, exception: ' + str(e))
+
+log('done')

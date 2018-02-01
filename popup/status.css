@@ -1,0 +1,45 @@
+html, body {
+  width: 550px;
+}
+
+body {
+  padding: 0 10px 10px 10px;
+}
+
+.hidden {
+  display: none;
+}
+
+.button {
+  margin: 2% 10px 2% auto;
+  padding: 2px;
+  text-align: right;
+  cursor: pointer;
+  font-size: 1.2em;
+}
+
+div.buttons {
+  width: 100%;
+}
+
+div.row {
+  text-align: right;
+}
+
+div.row > div {
+  display: inline-block;
+}
+
+div.download {
+  margin-top: 8px;
+}
+
+div.url, div.title {
+  font-weight: bold;
+}
+
+div.download > div {
+  margin-top: 3px;
+  padding-left: 10px;
+}
+
