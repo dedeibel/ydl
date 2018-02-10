@@ -54,6 +54,13 @@ This is just me sharing the code. This project **requires manual installation of
     * Means the native application file is not properly installed or the app ``id`` and ``allowed_extensions`` list do not match
 * The firefox webextensions site should be a good resource for research [https://developer.mozilla.org/en-US/Add-ons/WebExtensions](https://developer.mozilla.org/en-US/Add-ons/WebExtensions)
 
+## Notes
+
+As a python script it is also possible to use youtube-dl as a library. This
+approach might be simpler and involve less code. But for now this version runs
+pretty well and was fun to write. I'll stick with it now unless some problems
+appear.
+
 ## License
 
 See [LICENSE](LICENSE)
