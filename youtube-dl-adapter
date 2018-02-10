@@ -98,13 +98,13 @@ class Download:
         if self.state != State.INIT:
             raise Exception('download must be in init state')
 
-        # TODO config
         self.state = State.RUNNING
         self.current_status_text = 'starting'
         self.log('download ' + self.url)
         self.proc = Popen([
             youtube_dl_path,
             '--abort-on-error',
+            '--no-call-home',
             '--ignore-config',
             '--no-mark-watched',
             '--socket-timeout', '3',
