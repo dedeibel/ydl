@@ -19,7 +19,7 @@ This is just me sharing the code. This project **requires manual installation of
 1. Copy ``youtube-dl-adapter`` e.g. to ``/opt/bin/``
 1. Edit the file and modify the ``download_directory`` variable if you like.
     * Check the path of ``youtube_dl_path``
-1. Make it executable ``chmod a+x /opt/bin/youtube-dl-adapter``.
+1. Make it executable ``chmod a+rx /opt/bin/youtube-dl-adapter``.
 1. Check or modify that the ``path`` entry of ``youtube-dl-adapter.json`` resembles the install location of the file ``youtube-dl-adapter`` script. Here ``/opt/bin/youtube-dl-adapter``
 1. Check that the adapter works in general. There is a little debug cli option.
    ``/opt/bin/youtube-dl-adapter --url "https://www.  youtube.com/watch?v=hzoABukGVHE"``
